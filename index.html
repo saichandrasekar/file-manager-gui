@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Manager</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        orange: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            200: '#fed7aa',
+                            300: '#fdba74',
+                            400: '#fb923c',
+                            500: '#f97316',
+                            600: '#ea580c',
+                            700: '#c2410c',
+                            800: '#9a3412',
+                            900: '#7c2d12',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+        .file-icon {
+            font-size: 2rem;
+        }
+        .loading-spin {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef, Fragment } = React;
+
+        // Mock Data
+        const mockFiles = [
+            {
+                id: '1',
+                name: 'Documents',
+                type: 'folder',
+                size: 0,
+                createdAt: '2024-01-15T10:30:00Z',
+                modifiedAt: '2024-01-20T14:45:00Z',
+                path: '/Documents',
+            },
+            {
+                id: '2',
+                name: 'Images',
+                type: 'folder',
+                size: 0,
+                createdAt: '2024-01-10T09:15:00Z',
+                modifiedAt: '2024-01-25T16:20:00Z',
+                path: '/Images',
+            },
+            {
+                id: '3',
+                name: 'presentation.pdf',
+                type: 'file',
+                size: 2456789,
+                mimeType: 'application/pdf',
+                createdAt: '2024-01-18T11:00:00Z',
+                modifiedAt: '2024-01-18T11:00:00Z',
+                path: '/presentation.pdf',
+            },
+            {
+                id: '4',
+                name: 'report.docx',
+                type: 'file',
+                size: 1234567,
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                createdAt: '2024-01-19T13:30:00Z',
+                modifiedAt: '2024-01-22T09:45:00Z',
+                path: '/report.docx',
+            },
+            {
+                id: '5',
+                name: 'screenshot.png',
+                type: 'file',
+                size: 987654,
+                mimeType: 'image/png',
+                createdAt: '2024-01-21T15:20:00Z',
+                modifiedAt: '2024-01-21T15:20:00Z',
+                path: '/screenshot.png',
+            },
+            {
+                id: '6',
+                name: 'video.mp4',
+                type: 'file',
+                size: 15678901,
+                mimeType: 'video/mp4',
+                createdAt: '2024-01-23T09:15:00Z',
+                modifiedAt: '2024-01-23T09:15:00Z',
+                path: '/video.mp4',
+            },
+            {
+                id: '7',
+                name: 'music.mp3',
+                type: 'file',
+                size: 4567890,
+                mimeType: 'audio/mpeg',
+                createdAt: '2024-01-24T14:30:00Z',
+                modifiedAt: '2024-01-24T14:30:00Z',
+                path: '/music.mp3',
+            }
+        ];
+
+        // Utility Functions
+        const formatFileSize = (bytes) => {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
+        const formatDate = (dateString) => {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        };
+
+        const getFileIcon = (file) => {
+            if (file.type === 'folder') return '📁';
+            
+            const extension = file.name.split('.').pop()?.toLowerCase();
+            const iconMap = {
+                pdf: '📄',
+                doc: '📝',
+                docx: '📝',
+                txt: '📝',
+                jpg: '🖼️',
+                jpeg: '🖼️',
+                png: '🖼️',
+                gif: '🖼️',
+                mp4: '🎥',
+                mp3: '🎵',
+                zip: '📦',
+                rar: '📦',
+            };
+            
+            return iconMap[extension] || '📄';
+        };
+
+        const generateBreadcrumbs = (path) => {
+            const parts = path.split('/').filter(Boolean);
+            const breadcrumbs = [{ name: 'Home', path: '/' }];
+            
+            let currentPath = '';
+            parts.forEach(part => {
+                currentPath += `/${part}`;
+                breadcrumbs.push({ name: part, path: currentPath });
+            });
+            
+            return breadcrumbs;
+        };
+
+        // Components
+        const Button = ({ variant = 'primary', size = 'md', className = '', children, disabled, onClick, type = 'button' }) => {
+            const baseClasses = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+            
+            const variants = {
+                primary: 'bg-orange-600 hover:bg-orange-700 text-white focus:ring-orange-500',
+                secondary: 'bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-gray-500',
+                danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
+                ghost: 'hover:bg-gray-100 text-gray-700 focus:ring-gray-500',
+            };
+
+            const sizes = {
+                sm: 'px-3 py-1.5 text-sm',
+                md: 'px-4 py-2 text-sm',
+                lg: 'px-6 py-3 text-base',
+            };
+
+            return (
+                <button
+                    type={type}
+                    className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
+                    disabled={disabled}
+                    onClick={onClick}
+                >
+                    {children}
+                </button>
+            );
+        };
+
+        const Input = ({ label, error, className = '', value, onChange, placeholder, type = 'text' }) => {
+            return (
+                <div className="w-full">
+                    {label && (
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {label}
+                        </label>
+                    )}
+                    <input
+                        type={type}
+                        className={`block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 ${error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''} ${className}`}
+                        value={value}
+                        onChange={onChange}
+                        placeholder={placeholder}
+                    />
+                    {error && (
+                        <p className="mt-1 text-sm text-red-600">{error}</p>
+                    )}
+                </div>
+            );
+        };
+
+        const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
+            if (!isOpen) return null;
+
+            const sizeClasses = {
+                sm: 'max-w-md',
+                md: 'max-w-lg',
+                lg: 'max-w-2xl',
+                xl: 'max-w-4xl',
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="fixed inset-0 bg-black bg-opacity-25" onClick={onClose}></div>
+                    <div className={`relative bg-white rounded-xl shadow-lg w-full mx-4 ${sizeClasses[size]}`}>
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+                            <button
+                                onClick={onClose}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Header = ({ 
+            onSearch, 
+            onUpload, 
+            onCreateFolder, 
+            onDeleteSelected, 
+            onRefresh, 
+            selectedCount, 
+            viewMode, 
+            onViewModeChange, 
+            loading 
+        }) => {
+            const [searchQuery, setSearchQuery] = useState('');
+
+            const handleSearch = (e) => {
+                e.preventDefault();
+                onSearch(searchQuery);
+            };
+
+            return (
+                <div className="bg-white shadow-sm border-b border-gray-200 p-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        {/* Search */}
+                        <form onSubmit={handleSearch} className="flex-1 max-w-md">
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</span>
+                                <Input
+                                    type="text"
+                                    placeholder="Search files and folders..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
+                        </form>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* View Toggle */}
+                            <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                                <button
+                                    onClick={() => onViewModeChange('grid')}
+                                    className={`p-2 rounded-md transition-colors ${
+                                        viewMode === 'grid' 
+                                            ? 'bg-white shadow-sm text-orange-600' 
+                                            : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                >
+                                    ⊞
+                                </button>
+                                <button
+                                    onClick={() => onViewModeChange('list')}
+                                    className={`p-2 rounded-md transition-colors ${
+                                        viewMode === 'list' 
+                                            ? 'bg-white shadow-sm text-orange-600' 
+                                            : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                >
+                                    ☰
+                                </button>
+                            </div>
+
+                            <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
+                                <span className={loading ? 'loading-spin' : ''}>🔄</span>
+                                <span className="ml-2">Refresh</span>
+                            </Button>
+
+                            <Button variant="secondary" size="sm" onClick={onCreateFolder}>
+                                📁 New Folder
+                            </Button>
+
+                            <Button variant="primary" size="sm" onClick={onUpload}>
+                                📤 Upload
+                            </Button>
+
+                            {selectedCount > 0 && (
+                                <Button variant="danger" size="sm" onClick={onDeleteSelected}>
+                                    🗑️ Delete ({selectedCount})
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Breadcrumb = ({ currentPath, onNavigate }) => {
+            const breadcrumbs = generateBreadcrumbs(currentPath);
+
+            return (
+                <div className="flex items-center space-x-1 text-sm text-gray-600 p-4 bg-gray-50">
+                    {breadcrumbs.map((crumb, index) => (
+                        <Fragment key={crumb.path}>
+                            {index > 0 && <span className="text-gray-400">›</span>}
+                            <button
+                                onClick={() => onNavigate(crumb.path)}
+                                className={`flex items-center space-x-1 hover:text-orange-600 transition-colors ${
+                                    index === breadcrumbs.length - 1 
+                                        ? 'text-orange-600 font-medium' 
+                                        : 'text-gray-600'
+                                }`}
+                            >
+                                {index === 0 && <span>🏠</span>}
+                                <span>{crumb.name}</span>
+                            </button>
+                        </Fragment>
+                    ))}
+                </div>
+            );
+        };
+
+        const FileGrid = ({ files, selectedFiles, onFileSelect, onFileDoubleClick, onDownload, viewMode }) => {
+            if (viewMode === 'list') {
+                return (
+                    <div className="bg-white">
+                        {/* Table Header */}
+                        <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-gray-200 text-sm font-medium text-gray-500 uppercase tracking-wider">
+                            <div className="col-span-1">
+                                <input
+                                    type="checkbox"
+                                    onChange={(e) => {
+                                        files.forEach(file => onFileSelect(file.id, e.target.checked));
+                                    }}
+                                    className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                />
+                            </div>
+                            <div className="col-span-5">Name</div>
+                            <div className="col-span-2">Size</div>
+                            <div className="col-span-2">Modified</div>
+                            <div className="col-span-2">Actions</div>
+                        </div>
+
+                        {/* File Rows */}
+                        <div className="divide-y divide-gray-200">
+                            {files.map((file) => (
+                                <div
+                                    key={file.id}
+                                    className={`grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 transition-colors ${
+                                        selectedFiles.has(file.id) ? 'bg-orange-50' : ''
+                                    }`}
+                                >
+                                    <div className="col-span-1 flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedFiles.has(file.id)}
+                                            onChange={(e) => onFileSelect(file.id, e.target.checked)}
+                                            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                    
+                                    <div 
+                                        className="col-span-5 flex items-center space-x-3 cursor-pointer"
+                                        onDoubleClick={() => onFileDoubleClick(file)}
+                                    >
+                                        <span className="text-2xl">{getFileIcon(file)}</span>
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                                            {file.type === 'file' && file.mimeType && (
+                                                <p className="text-xs text-gray-500">{file.mimeType}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="col-span-2 flex items-center">
+                                        <span className="text-sm text-gray-500">
+                                            {file.type === 'file' ? formatFileSize(file.size) : '—'}
+                                        </span>
+                                    </div>
+
+                                    <div className="col-span-2 flex items-center">
+                                        <span className="text-sm text-gray-500">{formatDate(file.modifiedAt)}</span>
+                                    </div>
+
+                                    <div className="col-span-2 flex items-center space-x-2">
+                                        {file.type === 'file' && (
+                                            <button
+                                                onClick={() => onDownload(file.id)}
+                                                className="p-1 text-gray-400 hover:text-orange-600 transition-colors"
+                                                title="Download"
+                                            >
+                                                💾
+                                            </button>
+                                        )}
+                                        <button className="p-1 text-gray-400 hover:text-gray-600 transition-colors">
+                                            ⋮
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Grid View
+            return (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 p-6">
+                    {files.map((file) => (
+                        <div
+                            key={file.id}
+                            className={`relative group bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer ${
+                                selectedFiles.has(file.id) ? 'ring-2 ring-orange-500 bg-orange-50' : ''
+                            }`}
+                            onClick={() => onFileSelect(file.id, !selectedFiles.has(file.id))}
+                            onDoubleClick={() => onFileDoubleClick(file)}
+                        >
+                            {/* Selection Checkbox */}
+                            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedFiles.has(file.id)}
+                                    onChange={(e) => {
+                                        e.stopPropagation();
+                                        onFileSelect(file.id, e.target.checked);
+                                    }}
+                                    className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                />
+                            </div>
+
+                            {/* File Icon */}
+                            <div className="flex justify-center mb-3">
+                                <span className="text-4xl">{getFileIcon(file)}</span>
+                            </div>
+
+                            {/* File Name */}
+                            <h3 className="text-sm font-medium text-gray-900 text-center truncate mb-1">
+                                {file.name}
+                            </h3>
+
+                            {/* File Info */}
+                            <div className="text-xs text-gray-500 text-center">
+                                {file.type === 'file' ? formatFileSize(file.size) : 'Folder'}
+                            </div>
+
+                            {/* Actions */}
+                            {file.type === 'file' && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDownload(file.id);
+                                    }}
+                                    className="absolute top-2 right-2 p-1 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-orange-600"
+                                    title="Download"
+                                >
+                                    💾
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const UploadModal = ({ isOpen, onClose, onUpload, uploadProgress }) => {
+            const [selectedFiles, setSelectedFiles] = useState([]);
+            const [isDragOver, setIsDragOver] = useState(false);
+            const fileInputRef = useRef(null);
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+            };
+
+            const handleDragLeave = (e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+                const files = Array.from(e.dataTransfer.files);
+                setSelectedFiles(prev => [...prev, ...files]);
+            };
+
+            const handleFileSelect = (e) => {
+                const files = Array.from(e.target.files);
+                setSelectedFiles(prev => [...prev, ...files]);
+            };
+
+            const handleUpload = () => {
+                if (selectedFiles.length > 0) {
+                    onUpload(selectedFiles);
+                    setSelectedFiles([]);
+                }
+            };
+
+            const removeFile = (index) => {
+                setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+            };
+
+            const hasUploads = uploadProgress.length > 0;
+            const isUploading = uploadProgress.some(p => p.status === 'uploading');
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Upload Files" size="lg">
+                    <div className="space-y-6">
+                        {/* Dropzone */}
+                        <div
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                                isDragOver 
+                                    ? 'border-orange-500 bg-orange-50' 
+                                    : 'border-gray-300 hover:border-orange-400'
+                            }`}
+                        >
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                onChange={handleFileSelect}
+                                className="hidden"
+                            />
+                            <div className="text-4xl mb-4">📤</div>
+                            <p className="text-lg font-medium text-gray-900 mb-2">
+                                {isDragOver ? 'Drop files here' : 'Drag & drop files here'}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                                or click to select files from your computer
+                            </p>
+                        </div>
+
+                        {/* Selected Files */}
+                        {selectedFiles.length > 0 && (
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-medium text-gray-900">Selected Files</h3>
+                                <div className="max-h-40 overflow-y-auto space-y-2">
+                                    {selectedFiles.map((file, index) => (
+                                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                                            <div className="flex items-center space-x-2">
+                                                <span>📄</span>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                                                    <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => removeFile(index)}
+                                                className="text-gray-400 hover:text-red-600 transition-colors"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Upload Progress */}
+                        {hasUploads && (
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-medium text-gray-900">Upload Progress</h3>
+                                <div className="space-y-2">
+                                    {uploadProgress.map((progress, index) => (
+                                        <div key={index} className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-gray-700">{progress.fileName}</span>
+                                                <div className="flex items-center space-x-2">
+                                                    {progress.status === 'completed' && <span className="text-green-500">✓</span>}
+                                                    {progress.status === 'error' && <span className="text-red-500">⚠</span>}
+                                                    <span className="text-xs text-gray-500">{progress.progress}%</span>
+                                                </div>
+                                            </div>
+                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div
+                                                    className={`h-2 rounded-full transition-all ${
+                                                        progress.status === 'error' ? 'bg-red-500' : 'bg-orange-500'
+                                                    }`}
+                                                    style={{ width: `${progress.progress}%` }}
+                                                />
+                                            </div>
+                                            {progress.error && (
+                                                <p className="text-xs text-red-600">{progress.error}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex justify-end space-x-3">
+                            <Button variant="secondary" onClick={onClose} disabled={isUploading}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="primary"
+                                onClick={handleUpload}
+                                disabled={selectedFiles.length === 0 || isUploading}
+                            >
+                                Upload {selectedFiles.length > 0 && `(${selectedFiles.length})`}
+                            </Button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        const CreateFolderModal = ({ isOpen, onClose, onCreateFolder }) => {
+            const [folderName, setFolderName] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                setError('');
+
+                if (!folderName.trim()) {
+                    setError('Folder name is required');
+                    return;
+                }
+
+                if (folderName.includes('/') || folderName.includes('\\')) {
+                    setError('Folder name cannot contain / or \\');
+                    return;
+                }
+
+                onCreateFolder(folderName.trim());
+                setFolderName('');
+                onClose();
+            };
+
+            const handleClose = () => {
+                setFolderName('');
+                setError('');
+                onClose();
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={handleClose} title="Create New Folder">
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <Input
+                            label="Folder Name"
+                            value={folderName}
+                            onChange={(e) => setFolderName(e.target.value)}
+                            placeholder="Enter folder name"
+                            error={error}
+                        />
+
+                        <div className="flex justify-end space-x-3">
+                            <Button type="button" variant="secondary" onClick={handleClose}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" variant="primary">
+                                Create Folder
+                            </Button>
+                        </div>
+                    </form>
+                </Modal>
+            );
+        };
+
+        const EmptyState = ({ isSearchResult, onUpload }) => {
+            return (
+                <div className="flex flex-col items-center justify-center py-16 px-4">
+                    <div className="text-6xl text-gray-300 mb-4">📂</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        {isSearchResult ? 'No files found' : 'This folder is empty'}
+                    </h3>
+                    <p className="text-gray-500 text-center mb-6 max-w-sm">
+                        {isSearchResult 
+                            ? 'Try adjusting your search terms or browse through folders'
+                            : 'Get started by uploading some files or creating a new folder'
+                        }
+                    </p>
+                    {!isSearchResult && (
+                        <Button variant="primary" onClick={onUpload}>
+                            📤 Upload Files
+                        </Button>
+                    )}
+                </div>
+            );
+        };
+
+        const LoadingSpinner = () => {
+            return (
+                <div className="flex items-center justify-center py-16">
+                    <div className="flex items-center space-x-3">
+                        <span className="text-orange-600 loading-spin text-xl">🔄</span>
+                        <span className="text-gray-600">Loading files...</span>
+                    </div>
+                </div>
+            );
+        };
+
+        const Pagination = ({ currentPage, totalCount, pageSize, onPageChange }) => {
+            const totalPages = Math.ceil(totalCount / pageSize);
+            
+            if (totalPages <= 1) return null;
+
+            const startItem = (currentPage - 1) * pageSize + 1;
+            const endItem = Math.min(currentPage * pageSize, totalCount);
+
+            return (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+                    <div className="text-sm text-gray-700">
+                        Showing {startItem} to {endItem} of {totalCount} files
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onPageChange(currentPage - 1)}
+                            disabled={currentPage <= 1}
+                        >
+                            ‹ Previous
+                        </Button>
+                        
+                        <div className="flex items-center space-x-1">
+                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                    pageNum = i + 1;
+                                } else if (currentPage <= 3) {
+                                    pageNum = i + 1;
+                                } else if (currentPage >= totalPages - 2) {
+                                    pageNum = totalPages - 4 + i;
+                                } else {
+                                    pageNum = currentPage - 2 + i;
+                                }
+
+                                return (
+                                    <button
+                                        key={pageNum}
+                                        onClick={() => onPageChange(pageNum)}
+                                        className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                                            pageNum === currentPage
+                                                ? 'bg-orange-600 text-white'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onPageChange(currentPage + 1)}
+                            disabled={currentPage >= totalPages}
+                        >
+                            Next ›
+                        </Button>
+                    </div>
+                </div>
+            );
+        };
+
+        // Main File Manager Hook
+        const useFileManager = () => {
+            const [files, setFiles] = useState(mockFiles);
+            const [filteredFiles, setFilteredFiles] = useState(mockFiles);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [currentPath, setCurrentPath] = useState('/');
+            const [selectedFiles, setSelectedFiles] = useState(new Set());
+            const [uploadProgress, setUploadProgress] = useState([]);
+            const [currentPage, setCurrentPage] = useState(1);
+            const [isSearchMode, setIsSearchMode] = useState(false);
+            const pageSize = 50;
+
+            const loadFiles = useCallback(async (path = '/', page = 1) => {
+                setLoading(true);
+                setError(null);
+                
+                try {
+                    // Simulate API call
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    const pathFiles = files.filter(file => {
+                        if (path === '/') {
+                            return !file.path.includes('/', 1); // Root level files only
+                        }
+                        return file.path.startsWith(path) && file.path !== path;
+                    });
+                    
+                    setFilteredFiles(pathFiles);
+                    setCurrentPath(path);
+                    setCurrentPage(page);
+                    setIsSearchMode(false);
+                } catch (err) {
+                    setError('Failed to load files');
+                } finally {
+                    setLoading(false);
+                }
+            }, [files]);
+
+            const searchFiles = useCallback(async (query) => {
+                setLoading(true);
+                setError(null);
+                
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    const searchResults = files.filter(file =>
+                        file.name.toLowerCase().includes(query.toLowerCase())
+                    );
+                    
+                    setFilteredFiles(searchResults);
+                    setIsSearchMode(true);
+                } catch (err) {
+                    setError('Search failed');
+                } finally {
+                    setLoading(false);
+                }
+            }, [files]);
+
+            const uploadFiles = useCallback(async (fileList) => {
+                const progressItems = fileList.map(file => ({
+                    fileName: file.name,
+                    progress: 0,
+                    status: 'pending'
+                }));
+                
+                setUploadProgress(progressItems);
+
+                try {
+                    // Simulate upload progress
+                    for (let i = 0; i < progressItems.length; i++) {
+                        setUploadProgress(prev => 
+                            prev.map((p, idx) => idx === i ? { ...p, status: 'uploading', progress: 50 } : p)
+                        );
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        setUploadProgress(prev => 
+                            prev.map((p, idx) => idx === i ? { ...p, status: 'completed', progress: 100 } : p)
+                        );
+                    }
+
+                    // Add new files to the list
+                    const newFiles = fileList.map((file, index) => ({
+                        id: `upload-${Date.now()}-${index}`,
+                        name: file.name,
+                        type: 'file',
+                        size: file.size,
+                        mimeType: file.type,
+                        createdAt: new Date().toISOString(),
+                        modifiedAt: new Date().toISOString(),
+                        path: `${currentPath}${file.name}`,
+                    }));
+
+                    setFiles(prev => [...prev, ...newFiles]);
+                    await loadFiles(currentPath);
+                    
+                    // Clear progress after 2 seconds
+                    setTimeout(() => setUploadProgress([]), 2000);
+                } catch (err) {
+                    setUploadProgress(prev => 
+                        prev.map(p => ({ ...p, status: 'error', error: 'Upload failed' }))
+                    );
+                    setError('Upload failed');
+                }
+            }, [currentPath, loadFiles]);
+
+            const deleteSelectedFiles = useCallback(async () => {
+                if (selectedFiles.size === 0) return;
+
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    setFiles(prev => prev.filter(file => !selectedFiles.has(file.id)));
+                    setFilteredFiles(prev => prev.filter(file => !selectedFiles.has(file.id)));
+                    setSelectedFiles(new Set());
+                } catch (err) {
+                    setError('Delete failed');
+                }
+            }, [selectedFiles]);
+
+            const toggleFileSelection = useCallback((fileId, isSelected) => {
+                setSelectedFiles(prev => {
+                    const newSet = new Set(prev);
+                    if (isSelected) {
+                        newSet.add(fileId);
+                    } else {
+                        newSet.delete(fileId);
+                    }
+                    return newSet;
+                });
+            }, []);
+
+            const createFolder = useCallback(async (name) => {
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    const newFolder = {
+                        id: `folder-${Date.now()}`,
+                        name: name,
+                        type: 'folder',
+                        size: 0,
+                        createdAt: new Date().toISOString(),
+                        modifiedAt: new Date().toISOString(),
+                        path: `${currentPath}${name}`,
+                    };
+
+                    setFiles(prev => [...prev, newFolder]);
+                    await loadFiles(currentPath);
+                } catch (err) {
+                    setError('Failed to create folder');
+                }
+            }, [currentPath, loadFiles]);
+
+            useEffect(() => {
+                loadFiles();
+            }, []);
+
+            return {
+                files: filteredFiles,
+                loading,
+                error,
+                currentPath,
+                selectedFiles,
+                uploadProgress,
+                totalCount: filteredFiles.length,
+                currentPage,
+                pageSize,
+                loadFiles,
+                searchFiles,
+                uploadFiles,
+                deleteSelectedFiles,
+                toggleFileSelection,
+                createFolder,
+                setCurrentPath,
+            };
+        };
+
+        // Main FileManager Component
+        const FileManager = () => {
+            const {
+                files,
+                loading,
+                error,
+                currentPath,
+                selectedFiles,
+                uploadProgress,
+                totalCount,
+                currentPage,
+                pageSize,
+                loadFiles,
+                searchFiles,
+                uploadFiles,
+                deleteSelectedFiles,
+                toggleFileSelection,
+                createFolder,
+                setCurrentPath,
+            } = useFileManager();
+
+            const [viewMode, setViewMode] = useState('grid');
+            const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+            const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
+            const [isSearchMode, setIsSearchMode] = useState(false);
+
+            const handleSearch = useCallback(async (query) => {
+                if (query.trim()) {
+                    setIsSearchMode(true);
+                    await searchFiles(query.trim());
+                } else {
+                    setIsSearchMode(false);
+                    await loadFiles(currentPath);
+                }
+            }, [searchFiles, loadFiles, currentPath]);
+
+            const handleFileDoubleClick = useCallback((file) => {
+                if (file.type === 'folder') {
+                    const newPath = file.path;
+                    setCurrentPath(newPath);
+                    loadFiles(newPath);
+                    setIsSearchMode(false);
+                    setSelectedFiles(new Set());
+                }
+            }, [setCurrentPath, loadFiles]);
+
+            const handleNavigate = useCallback((path) => {
+                setCurrentPath(path);
+                loadFiles(path);
+                setIsSearchMode(false);
+                setSelectedFiles(new Set());
+            }, [setCurrentPath, loadFiles]);
+
+            const handleDownload = useCallback((fileId) => {
+                const file = files.find(f => f.id === fileId);
+                if (file) {
+                    // Create a mock download
+                    const content = `Mock file content for: ${file.name}`;
+                    const blob = new Blob([content], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = file.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }
+            }, [files]);
+
+            const handleUpload = useCallback((fileList) => {
+                uploadFiles(fileList);
+            }, [uploadFiles]);
+
+            const handleCreateFolder = useCallback(async (name) => {
+                await createFolder(name);
+            }, [createFolder]);
+
+            const handlePageChange = useCallback((page) => {
+                loadFiles(currentPath, page);
+            }, [loadFiles, currentPath]);
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <Header
+                        onSearch={handleSearch}
+                        onUpload={() => setIsUploadModalOpen(true)}
+                        onCreateFolder={() => setIsCreateFolderModalOpen(true)}
+                        onDeleteSelected={deleteSelectedFiles}
+                        onRefresh={() => loadFiles(currentPath)}
+                        selectedCount={selectedFiles.size}
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        loading={loading}
+                    />
+
+                    {/* Breadcrumb */}
+                    {!isSearchMode && (
+                        <Breadcrumb
+                            currentPath={currentPath}
+                            onNavigate={handleNavigate}
+                        />
+                    )}
+
+                    {/* Error Message */}
+                    {error && (
+                        <div className="mx-4 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-red-800">{error}</p>
+                        </div>
+                    )}
+
+                    {/* Main Content */}
+                    <div className="flex-1">
+                        {loading ? (
+                            <LoadingSpinner />
+                        ) : files.length === 0 ? (
+                            <EmptyState 
+                                isSearchResult={isSearchMode}
+                                onUpload={() => setIsUploadModalOpen(true)}
+                            />
+                        ) : (
+                            <>
+                                <FileGrid
+                                    files={files}
+                                    selectedFiles={selectedFiles}
+                                    onFileSelect={toggleFileSelection}
+                                    onFileDoubleClick={handleFileDoubleClick}
+                                    onDownload={handleDownload}
+                                    viewMode={viewMode}
+                                />
+                                
+                                {/* Status Bar */}
+                                <div className="bg-white border-t border-gray-200 px-6 py-3">
+                                    <div className="flex items-center justify-between text-sm text-gray-600">
+                                        <div className="flex items-center space-x-4">
+                                            <span>{files.length} items</span>
+                                            {selectedFiles.size > 0 && (
+                                                <span className="text-orange-600 font-medium">
+                                                    {selectedFiles.size} selected
+                                                </span>
+                                            )}
+                                        </div>
+                                        
+                                        <span>
+                                            Total size: {formatFileSize(
+                                                files.reduce((total, file) => total + file.size, 0)
+                                            )}
+                                        </span>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Modals */}
+                    <UploadModal
+                        isOpen={isUploadModalOpen}
+                        onClose={() => setIsUploadModalOpen(false)}
+                        onUpload={handleUpload}
+                        uploadProgress={uploadProgress}
+                    />
+
+                    <CreateFolderModal
+                        isOpen={isCreateFolderModalOpen}
+                        onClose={() => setIsCreateFolderModalOpen(false)}
+                        onCreateFolder={handleCreateFolder}
+                    />
+                </div>
+            );
+        };
+
+        // App Component
+        const App = () => {
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* App Header */}
+                    <header className="bg-white shadow-sm border-b-2 border-orange-500">
+                        <div className="px-6 py-4">
+                            <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center">
+                                    <span className="text-white font-bold">📁</span>
+                                </div>
+                                <h1 className="text-xl font-bold text-gray-900">File Manager</h1>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* File Manager */}
+                    <FileManager />
+                </div>
+            );
+        };
+
+        // Render the application
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

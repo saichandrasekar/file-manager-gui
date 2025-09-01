@@ -1,0 +1,43 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply antialiased;
+  }
+}
+
+@layer components {
+  .file-manager-container {
+    @apply min-h-screen bg-gray-50;
+  }
+  
+  .file-card {
+    @apply bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer;
+  }
+  
+  .file-card-selected {
+    @apply ring-2 ring-orange-500 bg-orange-50;
+  }
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.file-icon {
+  font-size: 2rem;
+}
+.loading-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
