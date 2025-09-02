@@ -91,10 +91,8 @@ export const FileManager: React.FC = () => {
 
   const handleCreateFolder = useCallback(async (name: string) => {
     try {
-      const response = await apiClient.createFolder(name, currentPath);
-      if (response.success) {
-        await loadFiles(currentPath);
-      }
+      const response = await apiClient.createFolder(`${currentPath}/${name}`);
+      await loadFiles(currentPath);
     } catch (err) {
       console.error('Failed to create folder:', err);
     }

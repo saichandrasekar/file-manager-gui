@@ -24,14 +24,16 @@ export const useFileManager = () => {
     
     try {
       const response = await apiClient.listFiles(page, pageSize, path);
-      if (response.success) {
-        setFiles(response.data.files);
-        setTotalCount(response.data.totalCount);
-        setCurrentPage(response.data.page);
-        setCurrentPath(path);
-      } else {
-        setError(response.error || 'Failed to load files');
-      }
+      let counter = 1;
+      response.data.fileList.forEach((element) =>{
+        element.id = counter.toString();
+        element.type = element.type.toLocaleUpperCase()==='DIRECTORY'?'folder':'file';
+        counter++;
+      })
+      setFiles(response.data.fileList);
+      setTotalCount(response.data.fileList?.length);
+      setCurrentPage(page);
+      setCurrentPath(path);
     } catch (err) {
       setError('Failed to load files');
     } finally {
@@ -46,7 +48,7 @@ export const useFileManager = () => {
     try {
       const response = await apiClient.searchFiles(params);
       if (response.success) {
-        setFiles(response.data.files);
+        setFiles(response.data.fileList);
         setTotalCount(response.data.totalCount);
         setCurrentPage(response.data.page);
       } else {

@@ -20,7 +20,7 @@ export interface ApiResponse<T> {
 }
 
 export interface ListFilesResponse {
-  files: FileItem[];
+  fileList: FileItem[];
   totalCount: number;
   page: number;
   pageSize: number;

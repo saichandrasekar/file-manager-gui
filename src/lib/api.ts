@@ -73,10 +73,10 @@ class ApiClient {
     });
   }
 
-  async createFolder(name: string, path: string = '/'): Promise<ApiResponse<FileItem>> {
-    return this.request<FileItem>('/files/folder', {
+  async createFolder(path: string = '/'): Promise<ApiResponse<FileItem>> {
+    return this.request<FileItem>('/directory', {
       method: 'POST',
-      body: JSON.stringify({ name, path }),
+      body: JSON.stringify({ path }),
     });
   }
 

@@ -1,3 +1,5 @@
+import { FileItem } from "../types/model";
+
 // File: utils/helpers.ts
 export const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
