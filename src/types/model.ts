@@ -10,6 +10,7 @@ export interface FileItem {
   path: string;
   thumbnail?: string;
   isSelected?: boolean;
+  
 }
 
 export interface ApiResponse<T> {

@@ -1,4 +1,5 @@
 // File: lib/api.ts
+import { FileEdit } from 'lucide-react';
 import { FileItem, ApiResponse, ListFilesResponse, SearchFilesParams } from '../types/model';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:18000/api/ftp';
@@ -59,17 +60,17 @@ class ApiClient {
     });
     formData.append('path', path);
 
-    return this.request<FileItem[]>('/files/upload', {
+    return this.request<FileItem[]>('/upload/bulk', {
       method: 'POST',
       headers: {},
       body: formData,
     });
   }
 
-  async deleteFiles(fileIds: string[]): Promise<ApiResponse<{ deletedCount: number }>> {
-    return this.request<{ deletedCount: number }>('/files/delete', {
+  async deleteFiles(fileIds: FileItem[]): Promise<ApiResponse<{ deletedCount: any}>> {
+    return this.request<{ deletedCount: any }>('/delete/bulk', {
       method: 'DELETE',
-      body: JSON.stringify({ fileIds }),
+      body: JSON.stringify({ paths: fileIds }),
     });
   }
 
@@ -80,9 +81,9 @@ class ApiClient {
     });
   }
 
-  async downloadFile(fileId: string): Promise<Blob | null> {
+  async downloadFile(filePath: string): Promise<Blob | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/files/${fileId}/download`);
+      const response = await fetch(`${API_BASE_URL}/download?path=${filePath}`);
       if (!response.ok) throw new Error('Download failed');
       return await response.blob();
     } catch (error) {

@@ -68,7 +68,10 @@ export const FileManager: React.FC = () => {
 
   const handleDownload = useCallback(async (fileId: string) => {
     try {
-      const blob = await apiClient.downloadFile(fileId);
+      
+      const selectedFile:any = files.filter(e =>{return e.id == fileId})
+      console.log(JSON.stringify(selectedFile));
+      const blob = await apiClient.downloadFile(selectedFile[0].path);
       if (blob) {
         const file = files.find(f => f.id === fileId);
         const url = window.URL.createObjectURL(blob);

@@ -8,7 +8,7 @@ import { clsx } from 'clsx';
 interface FileGridProps {
   files: FileItem[];
   selectedFiles: Set<string>;
-  onFileSelect: (fileId: string) => void;
+  onFileSelect: (fileId: FileItem) => void;
   onFileDoubleClick: (file: FileItem) => void;
   onDownload: (fileId: string) => void;
   viewMode: 'grid' | 'list';
@@ -32,10 +32,10 @@ export const FileGrid: React.FC<FileGridProps> = ({
               type="checkbox"
               onChange={(e) => {
                 if (e.target.checked) {
-                  files.forEach(file => onFileSelect(file.id));
+                  files.forEach(file => onFileSelect(file));
                 } else {
                   files.forEach(file => {
-                    if (selectedFiles.has(file.id)) onFileSelect(file.id);
+                    if (selectedFiles.has(file.id)) onFileSelect(file);
                   });
                 }
               }}
@@ -63,7 +63,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
                 <input
                   type="checkbox"
                   checked={selectedFiles.has(file.id)}
-                  onChange={() => onFileSelect(file.id)}
+                  onChange={() => onFileSelect(file)}
                   className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                 />
               </div>
@@ -121,7 +121,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
             'relative group bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer',
             selectedFiles.has(file.id) && 'ring-2 ring-orange-500 bg-orange-50'
           )}
-          onClick={() => onFileSelect(file.id)}
+          onClick={() => onFileSelect(file)}
           onDoubleClick={() => onFileDoubleClick(file)}
         >
           {/* Selection Checkbox */}
@@ -131,7 +131,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
               checked={selectedFiles.has(file.id)}
               onChange={(e) => {
                 e.stopPropagation();
-                onFileSelect(file.id);
+                onFileSelect(file);
               }}
               className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
             />

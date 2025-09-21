@@ -82,7 +82,8 @@ export const useFileManager = () => {
 
       const response = await apiClient.uploadFiles(fileList, currentPath);
       
-      if (response.success) {
+      console.log(`here 34534`)
+      if (response?.data) {
         setUploadProgress(prev => 
           prev.map(p => ({ ...p, status: 'completed', progress: 100 }))
         );
@@ -106,27 +107,43 @@ export const useFileManager = () => {
 
   const deleteSelectedFiles = useCallback(async () => {
     if (selectedFiles.size === 0) return;
+    console.log(`Delete files or folders`);
+    const deleteObjects = []
+    selectedFiles.forEach(fileId =>{
+      deleteObjects.push(...files.filter(file =>{return file.id==fileId}));
+    });
+    console.log(deleteObjects);
 
-    try {
-      const response = await apiClient.deleteFiles(Array.from(selectedFiles));
-      if (response.success) {
-        setSelectedFiles(new Set());
-        await loadFiles(currentPath);
-      } else {
-        setError(response.error || 'Delete failed');
+      try {
+          const response:any = await apiClient.deleteFiles(deleteObjects);
+          if (response?.data) {
+            const results:any[] = response.data.results.filter((e:any) =>{return (!e.success)});
+            
+            
+            if(results?.length>0){
+              setError(JSON.stringify(results) || 'Delete failed');
+            }
+            setSelectedFiles(new Set());
+          } else {
+            setError(response.error || 'Delete failed');
+          }
+      } catch (err) {
+        setError('Delete failed');
       }
-    } catch (err) {
-      setError('Delete failed');
-    }
+      
+    // });
+    await loadFiles(currentPath);
+    
   }, [selectedFiles, currentPath, loadFiles]);
 
-  const toggleFileSelection = useCallback((fileId: string) => {
+  const toggleFileSelection = useCallback((file: FileItem) => {
+    console.log(`File selected`)
     setSelectedFiles(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(fileId)) {
-        newSet.delete(fileId);
+      if (newSet.has(file.id)) {
+        newSet.delete(file.id);
       } else {
-        newSet.add(fileId);
+        newSet.add(file.id);
       }
       return newSet;
     });

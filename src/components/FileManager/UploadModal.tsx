@@ -36,7 +36,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const handleUpload = () => {
     if (selectedFiles.length > 0) {
       const fileList = new DataTransfer();
-      selectedFiles.forEach(file => fileList.items.add(file));
+      selectedFiles.forEach(file => {
+        fileList.items.add(file)
+
+        const reader = new FileReader();
+        // reader.onload = function(event) {
+        //     console.log("File content:", event.target.result);
+        // };
+        reader.readAsText(file);
+      });
       onUpload(fileList.files);
       setSelectedFiles([]);
     }
